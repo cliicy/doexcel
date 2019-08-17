@@ -6,6 +6,8 @@ import xlsxwriter
 import sys
 import csv
 import pandas as pd
+import datetime
+import xlrd
 
 
 def auto_str_number(text):
@@ -47,7 +49,7 @@ def add_csv_to_sheet(worksheet, csv_file, start_col):
     return col_idx
 
 
-def add_sheet_to_workbook(workbook, dir_path, files,share_name,sheets,dbsize):
+def add_sheet_to_workbook(workbook, dir_path, files,share_name,sheets,dbsize,dbsize_sheet):
     count = 0
     for file_name in files.keys():
         if not file_name.startswith('prepare') and 'redolog' not in file_name:
@@ -59,6 +61,7 @@ def add_sheet_to_workbook(workbook, dir_path, files,share_name,sheets,dbsize):
                 dbszinfo= pd.read_csv(dbszfile, usecols=['workload']).to_dict(orient='dict')
                 for k, v in dbszinfo['workload'].items():
                     dbsize.update({v: k+2})
+                dbsize_sheet.append(sht_name)
             else:
                 sheets.append(sht_name[:31])
             col = 0
@@ -82,23 +85,63 @@ def get_prefix(dir_name):
 
     return prefix
 
+def fill_comparison(summary_sheet,compsheet,out_file,vs_row_idx):
+    # fh = xlrd.open_workbook(out_file)
+    # table = fh.sheets()[0]
+    tt = summary_sheet.tables()
+    datavalue = []
+    # num = table.nrows
+    # for row in range(num):
+    #     rdata = table.row_values(row)
+    #     datavalue.append(rdata)
 
-def fill_summary(workbook, sheet, row_idx,sheetname,dbsize):
+    for a in range(len(datavalue)):
+        for b in range(len(datavalue[a])):
+            c = datavalue[a][b]
+            compsheet.write(a, b, c)
+    # formula_info = '=\'{0}\'!{1}'
+    # columns = [
+    #     ['storage saving', 'B', formula_info],
+    #     ['DB size logical (GB)', 'C', formula_info],
+    #     ['DB size physical (GB)', 'D', formula_info],
+    #     ('ops/sec', 'E', formula_info),
+    #     ('%99 latency', 'F', formula_info),
+    #     ['Read throughput (MB/s)', 'G', formula_info],
+    #     ['Write throughput (MB/s)', 'H', formula_info],
+    #     ['avgqu-sz', 'I', formula_info],
+    #     ['%util i/o', 'G', formula_info],
+    #     ['%user cpu', 'K', formula_info],
+    #     ['%sys cpu', 'L', formula_info],
+    #     ['%iowait cpu', 'M', formula_info],
+    #     ['%cpu', 'N', formula_info]
+    # ]
+    # for i in range(0, len(columns)):
+    #     compsheet.write(vs_row_idx, i + 1, columns[i][0])
+    #
+    # for j in range(0, len(columns)):
+    #     column = columns[j]
+    #     value = column[2].format(summary_name, column[1])
+    #     if not value:
+    #         value = 0
+    #     sheet.write(row_idx + i + 1, j + 1 + ssl + szl, value, num_format)
+
+    return vs_row_idx + 5 + 3
+
+
+def fill_summary(workbook, sheet, row_idx,sheetname,dbsize,dbsize_sheet):
     formula_average = '=AVERAGE(\'{0}\'!{1}2:{1}4000)'
     formula_average_percent = '=100-AVERAGE(\'{0}\'!{1}2:{1}4000)'
     formula_size = '=\'{0}\'!{1}'
     formula_size_sector = '=\'{0}\'!{1}/2/1024/1024'
-    formula_storage_saving = '=(C{0}-D{0})/C{0}' # temporary value =(C2-D2)/C2
+    formula_storage_saving = '=(C{0}-D{0})/C{0}'  # temporary value =(C2-D2)/C2
 
     columns_ss = [
         ['storage saving', '', formula_storage_saving]
     ]
-
     columns_sz = [
         ['DB size logical (GB)', 'B', formula_size],
         ['DB size physical (GB)', 'C', formula_size_sector]
     ]
-
     columns = [
         ('ops/sec', 'D', formula_average),
         ('%99 latency', 'M', formula_average),
@@ -111,7 +154,6 @@ def fill_summary(workbook, sheet, row_idx,sheetname,dbsize):
         ['%iowait cpu', 'AF', formula_average],
         ['%cpu', 'AG', formula_average_percent]
     ]
-
     num_format = workbook.add_format()
     num_format.set_num_format('#,##0.00')
     parts_interval=3
@@ -131,7 +173,8 @@ def fill_summary(workbook, sheet, row_idx,sheetname,dbsize):
         wksheet = sheetname[i]
         # get db size from dbsize sheet
         prename,suffixname=wksheet.split('-',1)
-        dbsz_sheet='{0}-{1}'.format('dbsz', suffixname)
+        #dbsz_sheet='{0}-{1}'.format('dbsz', suffixname)
+        dbsz_sheet=dbsize_sheet[0]
         dblogical_cell='{0}{1}'.format('B',dbsize[prename])
         dbphy_cell='{0}{1}'.format('C',dbsize[prename])
         columns_sz[0][1]=dblogical_cell
@@ -203,6 +246,13 @@ if __name__ == '__main__':
     result_dir_list = [
         sys.argv[1],
     ]
+    # comparison excel file
+    # st=datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
+    st=datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
+    comparison_file = os.path.join(result_dir_list[0], '{0}_{1}{2}'.format(st,'comparison', '.xlsx'))
+    cpwkbook = xlsxwriter.Workbook(comparison_file)
+    compsheet = cpwkbook.add_worksheet('comparison')
+
     for result_dir in result_dir_list:
         excel_dir = result_dir
         dir_list = os.listdir(result_dir)
@@ -218,6 +268,7 @@ if __name__ == '__main__':
                     case_name = d[len(prefix):].strip('-').strip('_')
                 else:
                     case_name = d
+                dbsize_sheet=[]
                 sheets_list=[]
                 dbsize={}
                 out_file = os.path.join(excel_dir,'{0}{1}'.format(case_name ,'.xlsx'))
@@ -239,15 +290,17 @@ if __name__ == '__main__':
                 share_name = '{}-{}-{}-{}'.format(ssd, comp,dbsz,maxleafsz)
                 share_name = share_name.lstrip('.')
                 share_name = share_name.rstrip('.')
-                summary_name = '{0}-{1}'.format('summary',share_name)
+                summary_name = '{0}-{1}'.format('SUM',share_name)
                 if out_file in workbooks.keys():
                     workbook = workbooks[out_file]
                 else:
                     workbook = xlsxwriter.Workbook(out_file)
-                    sfxsheet=workbook.add_worksheet(summary_name)
+                    summary_sheet=workbook.add_worksheet(summary_name)
                     workbooks[out_file] = workbook
                 files = collect_result_files(dir_path)
-                count = add_sheet_to_workbook(workbook, dir_path, files,share_name,sheets_list,dbsize)
-                summary_row_idx = fill_summary(workbook,sfxsheet, summary_row_idx,sheets_list,dbsize)
+                count = add_sheet_to_workbook(workbook, dir_path, files,share_name,sheets_list,dbsize,dbsize_sheet)
+                summary_row_idx = fill_summary(workbook,summary_sheet, summary_row_idx,sheets_list,dbsize,dbsize_sheet)
+                # compariosn_row_idx = fill_comparison(summary_sheet,compsheet,out_file,summary_row_idx)
         for workbook in workbooks:
             workbooks[workbook].close()
+    # cpwkbook.close()
