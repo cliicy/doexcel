@@ -8,6 +8,9 @@ import csv
 import pandas as pd
 import datetime
 import xlrd
+import time
+from pandas import ExcelWriter
+from pandas import ExcelFile
 
 
 def auto_str_number(text):
@@ -85,56 +88,126 @@ def get_prefix(dir_name):
 
     return prefix
 
-def fill_comparison(summary_sheet,compsheet,out_file,vs_row_idx):
-    # fh = xlrd.open_workbook(out_file)
-    # table = fh.sheets()[0]
-    tt = summary_sheet.tables()
-    datavalue = []
-    # num = table.nrows
-    # for row in range(num):
-    #     rdata = table.row_values(row)
-    #     datavalue.append(rdata)
 
-    for a in range(len(datavalue)):
-        for b in range(len(datavalue[a])):
-            c = datavalue[a][b]
-            compsheet.write(a, b, c)
-    # formula_info = '=\'{0}\'!{1}'
-    # columns = [
-    #     ['storage saving', 'B', formula_info],
-    #     ['DB size logical (GB)', 'C', formula_info],
-    #     ['DB size physical (GB)', 'D', formula_info],
-    #     ('ops/sec', 'E', formula_info),
-    #     ('%99 latency', 'F', formula_info),
-    #     ['Read throughput (MB/s)', 'G', formula_info],
-    #     ['Write throughput (MB/s)', 'H', formula_info],
-    #     ['avgqu-sz', 'I', formula_info],
-    #     ['%util i/o', 'G', formula_info],
-    #     ['%user cpu', 'K', formula_info],
-    #     ['%sys cpu', 'L', formula_info],
-    #     ['%iowait cpu', 'M', formula_info],
-    #     ['%cpu', 'N', formula_info]
-    # ]
-    # for i in range(0, len(columns)):
-    #     compsheet.write(vs_row_idx, i + 1, columns[i][0])
-    #
-    # for j in range(0, len(columns)):
-    #     column = columns[j]
-    #     value = column[2].format(summary_name, column[1])
-    #     if not value:
-    #         value = 0
-    #     sheet.write(row_idx + i + 1, j + 1 + ssl + szl, value, num_format)
+def open_xls(file):
+    try:
+        fh = xlrd.open_workbook(file)
+        fh.release_resources()
+        return fh
+    except Exception as e:
+        print(str("open exception，error：" + e))
 
-    return vs_row_idx + 5 + 3
+#存储所有读取的结果
+filevalue=[]
+#存储一个标签的结果
+svalue=[]
+#存储一行结果
+rvalue=[]
+# #存储各sheet名
+# shname=[]
+
+cmpvalue=[]
+#设置要合并的所有文件
+summary_xls={}
+#设置合并到的文件
 
 
-def fill_summary(workbook, sheet, row_idx,sheetname,dbsize,dbsize_sheet):
+# 获取所有sheet
+def getsheet(fh):
+    return fh.sheets()[0]
+
+# 读取某个sheet的行数
+def getnrows(fh, sheet):
+    table = fh.sheets()[sheet]
+    content = table.nrows
+    return content
+
+sn=1
+def getsvalue(k):
+    fn=len(summary_xls)
+    for z in range(k,k+fn):
+        cmpvalue.append(svalue[0][0][z])
+    return cmpvalue
+
+def open_excel(file= 'file.xls'):
+    try:
+        data = xlrd.open_workbook(file)
+        return data
+    except Exception as e:
+        print(str("open exception，error：" + e))
+
+def excel_table_byname(file='file.xls', colnameindex=0, by_name=u'Sheet1'):
+    data = open_excel(file)
+    table = data.sheet_by_name(by_name)
+    nrows = table.nrows  # 行数
+    colnames = table.row_values(colnameindex)  # 某一行数据
+    list = []
+    for rownum in range(1, nrows):
+        row = table.row_values(rownum)
+        if row:
+            app = {}
+            for i in range(len(colnames)):
+                app[colnames[i]] = row[i]
+            list.append(app)
+    return list
+
+#读取某个文件的内容并返回所有行的值
+def getfilect(fl,sum_shname,shnum):
+    fh = xlrd.open_workbook(fl, on_demand = True)
+    table=fh.sheet_by_index(0)  #.sheet_by_name(sum_shname)
+    num=getnrows(fh,shnum)
+    lenrvalue=len(rvalue)
+    for row in range(0,num):
+        rdata=table.row_values(row)
+        rvalue.append(rdata)
+    print(rvalue[lenrvalue:])
+    filevalue.append(rvalue[lenrvalue:])
+    return filevalue
+
+
+def fill_comparison(comparison_file):
+    svalue.append([])
+    for shnum in range(0, 1):
+        for key,value in summary_xls.items():
+            print('reading file：{}{}{}{}'.format(key, "... ..." , value ,"…"))
+            filevalue = getfilect(key, value, shnum)
+
+            svalue[shnum].append(filevalue)
+
+    sn = 1  # 只读一个sheet
+    fn = len(summary_xls)
+    cpwkbook=xlsxwriter.Workbook(comparison_file)
+    compsheet = cpwkbook.add_worksheet('comparison')
+    num_format = cpwkbook.add_format()
+    num_format.set_num_format('#,##0.00')
+    polit=0
+    linenum=0
+    #依次遍历每个sheet中的数据
+    for s in range(0,sn*fn,fn):
+        thisvalue=getsvalue(s)
+        tvalue=thisvalue[polit:]
+        #将一个标签的内容写入新文件中
+        for a in range(0,len(tvalue)):
+            for b in range(0,len(tvalue[a])):
+                for c in range(0,len(tvalue[a][b])):
+                    data=tvalue[a][b][c]
+                    compsheet.write(linenum,c,data)
+                linenum+=1
+        #叠加关系，需要设置分割点
+        polit=len(thisvalue)
+    cpwkbook.close()
+
+
+def fill_summary(workbook, sheet,row_idx,sheetname,dbsize,dbsize_sheet):
+    num_format = workbook.add_format()
+    num_format.set_num_format('#,##0.00')
+
     formula_average = '=AVERAGE(\'{0}\'!{1}2:{1}4000)'
     formula_average_percent = '=100-AVERAGE(\'{0}\'!{1}2:{1}4000)'
     formula_size = '=\'{0}\'!{1}'
     formula_size_sector = '=\'{0}\'!{1}/2/1024/1024'
     formula_storage_saving = '=(C{0}-D{0})/C{0}'  # temporary value =(C2-D2)/C2
-
+    parts_interval = 3
     columns_ss = [
         ['storage saving', '', formula_storage_saving]
     ]
@@ -154,11 +227,12 @@ def fill_summary(workbook, sheet, row_idx,sheetname,dbsize,dbsize_sheet):
         ['%iowait cpu', 'AF', formula_average],
         ['%cpu', 'AG', formula_average_percent]
     ]
-    num_format = workbook.add_format()
-    num_format.set_num_format('#,##0.00')
-    parts_interval=3
+
     ssl=len(columns_ss)
     szl=len(columns_sz)
+    # add the first colum of head tt
+    # sheet.write(row_idx, 0, 'Vanda vs Intel-Snappy')
+
     # add head of stroage saving
     for i in range(0, len(columns_ss)):
         sheet.write(row_idx, i + 1, columns_ss[i][0])
@@ -173,7 +247,6 @@ def fill_summary(workbook, sheet, row_idx,sheetname,dbsize,dbsize_sheet):
         wksheet = sheetname[i]
         # get db size from dbsize sheet
         prename,suffixname=wksheet.split('-',1)
-        #dbsz_sheet='{0}-{1}'.format('dbsz', suffixname)
         dbsz_sheet=dbsize_sheet[0]
         dblogical_cell='{0}{1}'.format('B',dbsize[prename])
         dbphy_cell='{0}{1}'.format('C',dbsize[prename])
@@ -238,6 +311,27 @@ def fill_summary(workbook, sheet, row_idx,sheetname,dbsize,dbsize_sheet):
     return row_idx + len(sheetname) + parts_interval
 
 
+def crComparison(result_dir_list):
+    # comparison excel file
+    st = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+    comparison_file = os.path.join(result_dir_list[0], '{0}_{1}{2}'.format(st, 'comparison', '.xlsx'))
+
+    for result_dir in result_dir_list:
+        excel_dir = result_dir
+        dir_list = os.listdir(result_dir)
+        workbooks = {}
+        for d in dir_list:
+            pp = os.path.join(result_dir, d)
+            file_ext = os.path.splitext(pp)[1]
+            if os.path.isfile(pp) and file_ext == '.xlsx' :
+                summary_xls[pp]=0
+                with open(pp, 'a+') as f:
+                    f.writelines('aaa')
+                    f.close()
+                    print('aaa')
+
+        fill_comparison(comparison_file)
+
 if __name__ == '__main__':
     if len(sys.argv) == 1:
         print("Please input the csv folder")
@@ -246,23 +340,25 @@ if __name__ == '__main__':
     result_dir_list = [
         sys.argv[1],
     ]
+    if len(sys.argv) == 3:
+        if sys.argv[2] == 'docompare':
+            crComparison(result_dir_list)
+            exit(0)
+
     # comparison excel file
-    # st=datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
-    st=datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
-    comparison_file = os.path.join(result_dir_list[0], '{0}_{1}{2}'.format(st,'comparison', '.xlsx'))
-    cpwkbook = xlsxwriter.Workbook(comparison_file)
-    compsheet = cpwkbook.add_worksheet('comparison')
+    # st=datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+    # comparison_file = os.path.join(result_dir_list[0], '{0}_{1}{2}'.format(st,'comparison', '.xlsx'))
 
     for result_dir in result_dir_list:
         excel_dir = result_dir
         dir_list = os.listdir(result_dir)
-
         workbooks = {}
         for d in dir_list:
             pp = os.path.join(result_dir,d)
             dir_path = os.path.join(pp,'csv')
             if os.path.exists(dir_path) and os.path.isdir(dir_path):
                 summary_row_idx = 0
+                comparison_row_idx = 0
                 prefix = get_prefix(d)
                 if len(d) > len(prefix) + 1:
                     case_name = d[len(prefix):].strip('-').strip('_')
@@ -299,8 +395,10 @@ if __name__ == '__main__':
                     workbooks[out_file] = workbook
                 files = collect_result_files(dir_path)
                 count = add_sheet_to_workbook(workbook, dir_path, files,share_name,sheets_list,dbsize,dbsize_sheet)
-                summary_row_idx = fill_summary(workbook,summary_sheet, summary_row_idx,sheets_list,dbsize,dbsize_sheet)
-                # compariosn_row_idx = fill_comparison(summary_sheet,compsheet,out_file,summary_row_idx)
+                summary_row_idx = fill_summary(workbook,summary_sheet,summary_row_idx,sheets_list,dbsize,dbsize_sheet)
+                summary_xls[out_file]=summary_name
         for workbook in workbooks:
             workbooks[workbook].close()
-    # cpwkbook.close()
+
+    # create comparison xlsx
+    # fill_comparison(comparison_file)
