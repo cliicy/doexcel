@@ -1,0 +1,131 @@
+#!/bin/bash
+
+function extract_ycsb_result () {
+    opts=("INSERT" "READ" "UPDATE")
+    result_file=$1
+
+    echo "ops/sec" > csv/${result_file}._ops.csv
+    grep -e "current ops/sec;" ${result_file} | grep -v CLEANUP | sed -r "s/.*operations; ([0-9.]+) current.*/\1/g" >> csv/${result_file}._ops.csv
+    for opt in ${opts[@]};
+    do
+        grep -e "current ops/sec;" ${result_file} | grep -v CLEANUP | grep -m 1 -e ${opt}
+        if [ $? -ne 0 ]; then continue; fi
+        echo "${opt},op_count,max_lat,min_lat,avg_lat,90%_lat,99%_lat,99.9%_lat,99.99%_lat" > csv/${f}.${opt}.csv
+        grep -e "current ops/sec;" ${result_file} | grep -v CLEANUP | \
+        grep -e ${opt} | \
+        sed -r "s/.*\[${opt}: Count=([0-9]+), Max=([0-9]+), Min=([0-9]+), Avg=([0-9.�]+|NaN+), 90=([0-9]+), 99=([0-9]+), 99.9=([0-9]+), 99.99=([0-9]+)\].*/,\1,\2,\3,\4,\5,\6,\7,\8/g" | sed -r "s/�/0/g" | sed -r "s/NaN/0/g" >> csv/${f}.${opt}.csv
+    done
+}
+
+function extract_sysbench_result () {
+    result_file=$1
+
+    pct_lat=`cat ${result_file} | grep -m 1 "\[" | sed -r 's/.*lat\s\(ms,([0-9%]+)\):.*/\1/g'`
+    echo "thrds,tps,qps,${pct_lat} latency" > csv/${result_file}.csv
+    grep "\[" ${result_file} | sed -r 's/.*thds:\s([0-9]+)\stps:\s([0-9.]+)\sqps:\s([0-9.]+).*%\):\s([0-9.]+).*/\1,\2,\3,\4/g' >> csv/${result_file}.csv 
+}
+
+function generate_csv() {
+    # this function is to convert Sysbench test output to CSV file,
+    # and convert iostat result (CPU/IO) to CSV file.
+    output_dir=$1
+    pushd ${output_dir}
+    if [ ! -e csv ]; then mkdir csv; fi
+
+    for f in `ls *.result`;
+    do
+        grep -e "com.yahoo.ycsb" -m 1 $f
+        if [ $? -eq 0 ]; then extract_ycsb_result $f; continue; fi
+
+        grep -e "sysbench" -m 1 $f
+        if [ $? -eq 0 ]; then extract_sysbench_result $f; continue; fi
+    done
+
+    for f in `ls *.iostat | grep -v -e prepare`;
+    do
+        io_fields="1,6-14"
+        cat $f | grep -m 1 Device | sed -r 's/\s+/,/g' | cut -d , -f ${io_fields} > csv/$f.csv
+        cat $f | grep -e sfd -e nvme | sed -r 's/\s+/,/g' | cut -d , -f ${io_fields} >> csv/$f.csv
+
+        cpu_usage_fields="2,4,5,7"
+        cat $f | grep -m 1 avg-cpu | sed -r 's/\s+/,/g' | cut -d , -f ${cpu_usage_fields} > csv/$f.cpu.csv
+        cat $f | grep -A 1 avg-cpu | grep -v -e -- -e avg-cpu | sed -r 's/\s+/,/g' | cut -d , -f ${cpu_usage_fields} >> csv/$f.cpu.csv
+    done
+
+    for f in `ls *.counter | grep -v -e prepare`;
+    do
+        fields="1,6-9"
+        head -n 3 $f | sed -r 's/\s+/,/g' | cut -d , -f ${fields} > csv/$f.redo1.csv
+        fields="1,5,7,8,12-14"
+        tail -n 2 $f | sed -r 's/\s+/,/g' | cut -d , -f ${fields} > csv/$f.redo2.csv
+    done
+    popd
+}
+
+function truncate_sys_tables() {
+    # clear data in MySQL performance schema tables. it is useful when 
+    # counter data within certain time range is being collected
+    ${mysql_basedir}/bin/mysql \
+            --socket=${mysql_socket} -u${mysql_user} -p${mysql_pwd} \
+            -e "call sys.ps_truncate_all_tables(0)"
+}
+
+
+function collect_perf_counter_redolog() {
+    timestamp="`date +%Y%m%d_%H%M%S`"
+    output_file=$1
+
+    if [ "output_file" == "" ]; then output_file=lat_${timestamp}.txt; fi
+
+    ${mysql_basedir}/bin/mysql \
+            --socket=${mysql_socket} -u${mysql_user} -p${mysql_pwd} \
+            -e "select * from sys.x\$io_global_by_file_by_latency where file like '%ib_logfile%'" > ${output_file}
+    ${mysql_basedir}/bin/mysql \
+            --socket=${mysql_socket} -u${mysql_user} -p${mysql_pwd} \
+            -e "select * from sys.x\$io_global_by_wait_by_latency where event_name like '%innodb_log_file%'" >> ${output_file} 
+}
+
+function collect_sys_info() {
+    # collect sys information, including
+    #   1. cpu
+    #   2. memory
+    #   3. disk
+    #   4. os
+    #   5. css-status output
+    local_output_dir=$1
+    css_status=$2
+    if [ "${local_output_dir}" == "" ];
+    then
+        local_output_dir=`pwd`
+    fi
+
+    if [ "${css_status}" == "" ];
+    then
+        css_status="css-status.sh"
+    fi
+
+    echo -e "\n[sys]"           >  ${local_output_dir}/sysinfo.txt
+    cat /sys/class/dmi/id/sys_vendor \
+                                >> ${local_output_dir}/sysinfo.txt
+    cat /sys/class/dmi/id/product_name \
+                                >> ${local_output_dir}/sysinfo.txt
+    cat /sys/class/dmi/id/product_version \
+                                >> ${local_output_dir}/sysinfo.txt
+    echo -e "\n[cpu]"           >> ${local_output_dir}/sysinfo.txt
+    lscpu                       >> ${local_output_dir}/sysinfo.txt
+    echo -e "\n[memory]"        >> ${local_output_dir}/sysinfo.txt
+    free -h                     >> ${local_output_dir}/sysinfo.txt
+    echo -e "\n[disk]"          >> ${local_output_dir}/sysinfo.txt
+    lsblk                       >> ${local_output_dir}/sysinfo.txt
+    df -h                       >> ${local_output_dir}/sysinfo.txt
+    echo -e "\n[nvme]"          >> ${local_output_dir}/sysinfo.txt
+    sudo nvme list              >> ${local_output_dir}/sysinfo.txt
+    echo -e "\n[os]"            >> ${local_output_dir}/sysinfo.txt
+    uname -a                    >> ${local_output_dir}/sysinfo.txt
+    cat /etc/system-release     >> ${local_output_dir}/sysinfo.txt
+    echo -e "\n[filesystem]"	>> ${local_output_dir}/sysinfo.txt
+    findmnt			>> ${local_output_dir}/sysinfo.txt
+    echo -e "\n[css-status]"    >> ${local_output_dir}/sysinfo.txt
+    sudo ${css_status}          >> ${local_output_dir}/sysinfo.txt
+}
+

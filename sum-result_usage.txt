@@ -2,3 +2,6 @@ sb-result.py -d path1,path2 -s suffix1,suffix2 -o output_file [-t sysbench|ycsb]
 
 pushd /f/mongodb/python_doexcel
 python sb-result.py  -d /f/mongodb/code_debug/case6 -s luo -o ./debug_res/aa.xlsx -t ycsb
+
+latest usage:
+python sum-result.py F:\mongodb\139_133_output\0912_vanda+snappy bfo

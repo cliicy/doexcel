@@ -1,0 +1,54 @@
+# mongod.conf
+
+# for documentation of all options, see:
+#   http://docs.mongodb.org/manual/reference/configuration-options/
+
+# where to write logging data.
+systemLog:
+  destination: file
+  logAppend: true
+  path: /opt/data/intel/mongodb-4.0.10/mongod.log
+
+# Where and how to store data.
+storage:
+  dbPath: /opt/data/intel/mongodb-4.0.10
+  #syncPeriodSecs: 1
+  journal:
+    enabled: true
+    commitIntervalMs: 1
+#  engine:
+#  mmapv1:
+  wiredTiger:
+    engineConfig:
+        #cacheSizeGB: 62
+        cacheSizeGB: 124
+        configString: direct_io=[data]
+    collectionConfig:
+        configString: leaf_page_max=32KB
+        blockCompressor: snappy
+
+# how the process runs
+processManagement:
+  fork: true  # fork and run in background
+  pidFilePath: /opt/data/intel/mongodb-4.0.10/mongod.pid  # location of pidfile
+  timeZoneInfo: /usr/share/zoneinfo
+
+# network interfaces
+net:
+  port: 27017
+  bindIp: 127.0.0.1  # Enter 0.0.0.0,:: to bind to all IPv4 and IPv6 addresses or, alternatively, use the net.bindIpAll setting.
+
+
+#security:
+
+#operationProfiling:
+
+#replication:
+
+#sharding:
+
+## Enterprise-Only Options
+
+#auditLog:
+
+#snmp:

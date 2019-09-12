@@ -1,0 +1,80 @@
+#!/bin/bash
+
+function get_dbsize_csv() {
+    # save load.dbsize/u100.dbszie/r50_u50.dbsize/r90_u10.dbsize to csv
+    output_dir=$1
+    pushd ${output_dir}
+    if [ ! -e csv ]; then mkdir csv; fi
+
+    # get_loadtime
+    for f in `ls *.result`;
+    do
+    ldt_name=csv/${f%.result}.time.csv
+    echo "RunTime(ms)"  > ${ldt_name}
+    ldt_fields="3"
+    cat $f | grep -m 1 'RunTime(ms)' | cut -d , -f ${ldt_fields} >> ${ldt_name}
+    done
+
+    dbs="workload,physical-GB,valid sectors,free sectors"
+
+    echo ${dbs} > csv/dbsz.csv
+
+    for f in `ls *.dbsize`;
+    do
+        wkload=${f%.dbsize}
+        physz=`sed -n '3,3p' ${f} |cut -f 1`
+        sectors=`grep sectors ${f} | grep -e [0-9] | awk '{print $9","$3}'`
+        echo "${wkload},${physz},${sectors}" >> csv/dbsz.csv
+    done
+    popd
+}
+
+function generate_benchinfo() {
+    output_dir=$3
+    echo "aa $output_dir"
+    ssd_name=$1
+    compname=$2
+    pushd ${output_dir}
+ 
+    rct=`cat ./load | grep '^\<recordcount\>' | cut -d '=' -f2`
+    fdc=`cat ./load | grep '^\<fieldcount\>' | cut -d '=' -f2`
+    fdl=`cat ./load | grep '^\<fieldlength\>' | cut -d '=' -f2`
+
+    echo "aa $output_dir $rct $fdc $fdl"
+    recordsz=`expr $fdc \* $fdl`
+    if [ "${recordsz}" == "512" ]; then
+        rsz=512B
+        dbsize=`expr ${recordsz} \* ${rct} / 1024 / 1024 / 1024`
+    elif [ "${recordsz}" == "2048" ]; then
+        rsz=2K
+        dbsize=`expr ${recordsz} \* ${rct} / 1024 / 1024`
+    elif [ "${recordsz}" == "4096" ]; then
+        rsz=4K
+        dbsize=`expr ${recordsz} \* ${rct} / 1024 / 1024`
+    #elif [ -z "${fdc}" && -z "${fdl}" ]; then
+    else
+        echo "fldcount=${fdc}filedlen=${fdl}"
+        rsz=1K
+        dbsize=`expr ${rct} / 1024 / 1024`
+    fi
+    size=`sed -n '3p' ./load.dbsize | cut -f1`
+  
+    lfflag=`grep leaf_page_max= ./${compname}.cnf`
+    if [ -z "${lfflag}" ]; then
+        leafsz=32KB
+    else
+        lfsz=`echo ${lfflag} | cut -b 1`  #是否有被屏蔽掉的设置
+        if [ "${lfsz}" == "#" ]; then  ## leaf_page_max被屏蔽了
+            echo "被屏蔽掉了"
+            leafsz=32KB
+        else
+            ##  leaf_page_max没有被屏蔽
+            leafsz=`echo ${lfflag} | cut -d '=' -f2`
+        fi
+    fi
+    echo -e "ssd=${ssd_name} compression=${compname} dbsize=${dbsize}G maxleafsz=lf${leafsz} recordsize=${rsz} load.size=${size}G\n" >> ./bench.info
+    new_name=${output_dir}_${ssd_name%3.2t}_${compname}_${dbsize}G_${rsz}_lf${leafsz}
+    zip -r ${new_name}.zip ${output_dir} -x "${output_dir}/*mongodb*.log"
+    popd
+    mv ${output_dir} ${new_name}
+}

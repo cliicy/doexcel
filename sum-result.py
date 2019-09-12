@@ -6,8 +6,6 @@ import os
 import sys
 import datetime
 import pandas as pd
-from sys import argv
-
 import xlsxwriter
 
 
@@ -361,9 +359,9 @@ def collect_result_files(dir_path):
     return results
 
 
-def fill_summary_mongodb(workbook, sheet,row_idx,sheetname,dbsize,dbsize_sheet):
+def fill_summary_mongodb(workbook, sheet,row_idx,sheetname,dbsize,dbsize_sheet,suffix):
     num_format = workbook.add_format()
-    num_format.set_num_format('#,##0.00')
+    num_format.set_num_format('#,##0.0')
 
     formula_average = '=AVERAGE(\'{0}\'!{1}2:{1}4000)'
     formula_average_percent = '=100-AVERAGE(\'{0}\'!{1}2:{1}4000)'
@@ -394,7 +392,7 @@ def fill_summary_mongodb(workbook, sheet,row_idx,sheetname,dbsize,dbsize_sheet):
     ssl=len(columns_ss)
     szl=len(columns_sz)
     # add the first colum of head tt
-    # sheet.write(row_idx, 0, 'Vanda vs Intel-Snappy')
+    sheet.write(row_idx, 0, suffix)
 
     # add head of stroage saving
     for i in range(0, len(columns_ss)):
@@ -434,7 +432,7 @@ def fill_summary_mongodb(workbook, sheet,row_idx,sheetname,dbsize,dbsize_sheet):
         if 'intel-none' in wksheet:
             # 不需要计算storage saving
             pass
-        elif 'vanda-none' in wksheet:
+        elif 'vanda' in wksheet:
             for j in range(0, ssl):
                 column = columns_ss[j]
                 column_index=i+2 # +2 真正存放dbsize的地方 是从第3列开始 前面2列一个是workload, 另外一个是storage saving
@@ -444,7 +442,24 @@ def fill_summary_mongodb(workbook, sheet,row_idx,sheetname,dbsize,dbsize_sheet):
                 sheet.write(row_idx + i + 1, j + 1, value, num_format)
         elif 'intel-snappy' in wksheet:
             # 需要先知道intel-none得到的存储size后才能计算 所以放到最后合并summary的时候再计算
-            pass
+            for j in range(0, ssl):
+                columns_ss[0][2]='=(C{0}-C{1})/C{0}'
+                column = columns_ss[j]
+                column_index=i+2 # +2 真正存放dbsize的地方 是从第3列开始 前面2列一个是workload, 另外一个是storage saving
+                value = column[2].format(column_index,column_index+7)
+                if not value:
+                    value = 0
+                sheet.write(row_idx + i + 1, j + 1, value, num_format)
+        elif 'intel-zlib' in wksheet:
+            # 需要先知道intel-none得到的存储size后才能计算 所以放到最后合并summary的时候再计算
+            for j in range(0, ssl):
+                columns_ss[0][2]='=(C{0}-C{1})/C{0}'
+                column = columns_ss[j]
+                column_index=i+2 # +2 真正存放dbsize的地方 是从第3列开始 前面2列一个是workload, 另外一个是storage saving
+                value = column[2].format(column_index,column_index+14)
+                if not value:
+                    value = 0
+                sheet.write(row_idx + i + 1, j + 1, value, num_format)
         #add the others data
         workloads = ['load', 'u100', 'r50_u50', 'r90_u10']
         if prename == workloads[2] or prename == workloads[3]:
@@ -482,6 +497,10 @@ if __name__ == '__main__':
     result_dirs = [
         sys.argv[1],
     ]
+    suffix=''
+    if len(sys.argv) == 3:
+        suffix=sys.argv[2]
+
     st=datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
     out_file = os.path.join(result_dirs[0], '{0}_{1}{2}'.format(st,'comparison', '.xlsx'))
     workbook = xlsxwriter.Workbook(out_file)
@@ -497,6 +516,37 @@ if __name__ == '__main__':
             pp = os.path.join(result_dir, d)
             dir_path = os.path.join(pp, 'csv')
             if os.path.exists(dir_path) and os.path.isdir(dir_path):
+                # read mgod.opts.log to get some re-configruation value
+                if suffix == "bfo":
+                    reconfigfile = os.path.join(os.path.dirname(dir_path), "mgod.opts.log")
+                    if os.path.isfile(reconfigfile):
+                        with open(reconfigfile) as mf:
+                            key = "Reconfiguring"
+                            for ones in mf.readlines():
+                                if key in ones:
+                                    confi_info=ones.split('"')
+                                    pmin = re.compile(r'.*threads_min=([0-9]+).*')
+                                    match = pmin.match(ones)
+                                    if match:
+                                        evc_min=match.group(1)
+                                    pmax = re.compile(r'.*threads_max=([0-9]+).*')
+                                    match = pmax.match(ones)
+                                    if match:
+                                        evc_max=match.group(1)
+                                    pdirty = re.compile(r'.*eviction_dirty_target=([0-9]+).*')
+                                    match = pdirty.match(ones)
+                                    if match:
+                                        evc_dirty=match.group(1)
+                                    ptarget = re.compile(r'.*eviction_target=([0-9]+).*')
+                                    match = ptarget.match(ones)
+                                    if match:
+                                        evc_target=match.group(1)
+                                    ptrigger = re.compile(r'.*eviction_trigger=([0-9]+).*')
+                                    match = ptrigger.match(ones)
+                                    if match:
+                                        evc_trigger=match.group(1)
+                                    suffix='evcInfo_{}_{}-{}.{}.{}'.format(evc_min,evc_max,evc_trigger,evc_target,evc_dirty)
+
                 dbsize_sheet = []
                 sheets_list = []
                 dbsize = {}
@@ -505,6 +555,7 @@ if __name__ == '__main__':
                 comp = ''
                 dbsz = ''
                 maxleafsz = ''
+                kvsize = ''
                 benchfp = os.path.join(os.path.dirname(dir_path), "bench.info")
                 if os.path.isfile(benchfp):
                     with open(benchfp) as fw:
@@ -512,11 +563,18 @@ if __name__ == '__main__':
                         ssd = rt[0].split('=')[1][:-4]
                         comp = rt[1].split('=')[1]
                         dbsz = rt[2].split('=')[1]
-                        maxleafsz = rt[3].split('=')[1]
-                share_name = '{}-{}-{}-{}'.format(ssd, comp, dbsz, maxleafsz)
+                        maxleafsz = rt[3].split('=')[1].rstrip('KB')
+                        kvsize = rt[4].split('=')[1]
+                if dbsz == '2048G':
+                    dbsz='2T'
+                if comp == 'none':
+                    share_name = '{0}-{1}{2}-{3}'.format(ssd, dbsz, maxleafsz, kvsize)
+                else:
+                    share_name = '{0}-{1}-{2}{3}-{4}'.format(ssd, comp, dbsz, maxleafsz,kvsize)
                 share_name = share_name.lstrip('.')
                 share_name = share_name.rstrip('.')
                 files = collect_result_files(dir_path)
                 count = add_sheet_to_workbook(workbook, dir_path, files,share_name,sheets_list, dbsize, dbsize_sheet)
-                summary_row_idx = fill_summary_mongodb(workbook,summary_sheet,summary_row_idx,sheets_list,dbsize,dbsize_sheet)
+                summary_row_idx = fill_summary_mongodb(workbook,summary_sheet,summary_row_idx,sheets_list,
+                                                       dbsize,dbsize_sheet,'{0}-{1}'.format(kvsize,suffix))
     workbook.close()
