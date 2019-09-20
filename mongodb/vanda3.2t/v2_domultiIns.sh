@@ -1,0 +1,4 @@
+#! /bin/bash
+
+((time /opt/app/ycsb-mongodb-binding-0.15.0/bin/ycsb load mongodb-async -s -threads 100 -p status.interval=5 -P ./workload/load -p mongodb-async.dir=/opt/data/css/mongodb-4.0.10 >> ${1} 2>&1 &) && ( echo $! >$1.ycsb.pid ) ); ((time /opt/app/ycsb-mongodb-binding-0.15.0/bin/ycsb load mongodb-async -s -threads 100 -p status.interval=5 -P ./workload/load_1 -p mongodb-async.dir=/opt/data/css/mongodb-4.0.10 >> ${1}.1 2>&1 &) && ( echo $! >>$1.ycsb.pid ));((time /opt/app/ycsb-mongodb-binding-0.15.0/bin/ycsb load mongodb-async -s -threads 100 -p status.interval=5 -P ./workload/load_2 -p mongodb-async.dir=/opt/data/css/mongodb-4.0.10 >> ${1}.2 2>&1 &) && ( echo $! >>$1.ycsb.pid ));((time /opt/app/ycsb-mongodb-binding-0.15.0/bin/ycsb load mongodb-async -s -threads 100 -p status.interval=5 -P ./workload/load_3 -p mongodb-async.dir=/opt/data/css/mongodb-4.0.10 >> ${1}.3 2>&1 &) && ( echo $! >>$1.ycsb.pid ))
+

@@ -22,6 +22,5 @@ compname=${app_cfg##*/}
 generate_benchinfo ${ssd_name} ${compname%.cnf} ${output_dir}
 
 rm -rf ./output.dir
-
 done
 

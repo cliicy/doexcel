@@ -21,20 +21,23 @@
 #   Default data size: 1 KB records (10 fields, 100 bytes each, plus key)
 #   Request distribution: zipfian
 
-recordcount=4294967296
-#operationcount=3000000
-maxexecutiontime=3600
+recordcount=4200000
+#recordcount=130000000
+#recordcount=4294967296
+#operationcount=50000000
 workload=com.yahoo.ycsb.workloads.CoreWorkload
 fieldcount=4
+#fieldlength=512
 fieldlength=128
 
+mongodb.batchsize=100
 readallfields=true
 writeallfields=true
 
-readproportion=0.9
-updateproportion=0.1
+readproportion=0
+updateproportion=0
 scanproportion=0
-insertproportion=0
+insertproportion=1
 readmodifywriteproportion=0
 
 insertorder=ordered
@@ -42,3 +45,4 @@ insertorder=ordered
 requestdistribution=uniform
 
 datacompressed=/opt/app/benchmark/mongodb/compress/normal.txt
+table=usertable1

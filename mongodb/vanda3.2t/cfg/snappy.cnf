@@ -20,10 +20,11 @@ storage:
 #  mmapv1:
   wiredTiger:
     engineConfig:
-        cacheSizeGB: 62
+        cacheSizeGB: 6
         #cacheSizeGB: 124
         configString: direct_io=[data]
     collectionConfig:
+        configString: leaf_page_max=8KB
         blockCompressor: snappy
 
 # how the process runs

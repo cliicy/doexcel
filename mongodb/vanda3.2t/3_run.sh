@@ -58,10 +58,33 @@ for workload in ${workload_set};
         echo $! > ${output_dir}/${workload_fname}.iostat.pid
 
 	cp ./workload/${workload} ${output_dir}
+	cp ./workload/${workload}_0 ${output_dir}/${workload}
 	# run ycsb workload, all parameters are from case-cfg/cfg_file
-        time ${yscb_dir}/bin/ycsb ${cmd} ${app} -s -threads ${threads} -p status.interval=${rpt_interval} \
-                -P ./workload/${workload} -p ${app}.dir=${app_datadir} \
-                >> ${output_dir}/${workload_fname}.result 2>&1
+        ins=`expr  ${ycsb_insts} + 1`
+        inst_threads=`expr ${threads} / ${ins}`
+        for index in $(seq 0 ${ycsb_insts});
+        do
+                if [ ${index} -gt 1 ];then
+                   cp -f ./workload/${workload}_1 ./workload/${workload}_${index}
+                   sed -i s/usertable1/usertable${index}/ ./workload/${workload}_${index}
+                fi
+                cp ./workload/${workload}_${index} ${output_dir}
+        	(time ${yscb_dir}/bin/ycsb ${cmd} ${app} -s -threads ${inst_threads} -p status.interval=${rpt_interval} \
+                	-P ./workload/${workload}_${index} -p ${app}.dir=${app_datadir}  \
+                      	>> ${output_dir}/${workload_fname}_${index}.result 2>&1) &
+        done
+
+	sleep 5
+        sh ckycsbinst_cpu.sh ${output_dir} ${app_basedir} ${yscb_dir} ${cmd}
+
+        for i in {1..400};
+        do
+            ps aux | grep -v grep | grep -e ${yscb_dir}/bin/ycsb
+            #ps aux | grep -v grep | grep -e "sh domultiIns.sh"
+            if [ $? -ne 0 ]; then echo ycsb is not  working; sleep 10; break; fi
+            echo "waiting for ycsb to finish"
+	    sleep 30
+        done
 
         du --block-size=1G ${app_datadir} > ${output_dir}/${workload_fname}.dbsize
         cat /sys/block/${dev_id}/sfx_smart_features/sfx_capacity_stat >> ${output_dir}/${workload_fname}.dbsize
@@ -78,7 +101,7 @@ for workload in ${workload_set};
         kill `cat ${output_dir}/tail.${workload_fname}.${app}.log.pid`
         rm -f ${output_dir}/tail.${workload_fname}.${app}.log.pid
         # sleep ${sleep_after_case}
-        sleep 360
+        sleep 30
         du --block-size=1G ${app_datadir} > ${output_dir}/${workload_fname}.2dbsize
         cat /sys/block/${dev_id}/sfx_smart_features/sfx_capacity_stat >> ${output_dir}/${workload_fname}.2dbsize
     done
