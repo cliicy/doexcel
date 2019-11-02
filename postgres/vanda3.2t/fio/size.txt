@@ -1,0 +1,8 @@
+2019-10-16T03:02:42-0700
+precondition starts ...
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sfdv0n1p1  5.3T   33M  5.3T   1% /opt/data/vanda
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sfdv0n1p1  5.3T  5.3T  168K 100% /opt/data/vanda
+precondition completed ...
+2019-10-16T03:43:10-0700

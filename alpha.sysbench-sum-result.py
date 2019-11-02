@@ -9,7 +9,15 @@ import pandas as pd
 import xlsxwriter
 
 
-
+pg_workloads = [
+        'dbsz.csv',
+        'oltp_read_only.result.csv',
+        'oltp_update_non_index.result.csv',
+        'oltp_update_index.result.csv',
+        'oltp_read_write.result.csv',
+        'oltp_write_only.result.csv',
+        'prepare.result.csv'
+    ]
 
 def auto_str_number(text, suffix=''):
     pattern = re.compile(r'^\s*[+-]?\d*[.]\d+$|^\s*[+-]?\s*\d+$')
@@ -158,20 +166,20 @@ def fill_summary_sysbench(workbook, suffix, row_idx, dbsizes, dbsizes_physical):
         ('DB size physical (GB)', dbsizes_physical, formula_size_sector),
     ]
     workloads = [
-        ('read only', 'read_only'),
         ('update non index', 'update_non_index'),
         ('update index', 'update_index'),
-        ('point_select', 'point_select'),
+        ('read/write', 'read_write'),
         ('write only', 'write_only'),
+        ('read only', 'read_only')
     ]
 
     # DB size here means the size before the workload runs
     workloads_dbsizes_mapping = [
-        ('read_only', 'read_only'),
         ('update_non_index', 'update_index'),
         ('update_index', 'prepare'),
         ('read_write', 'update_non_index'),
-        ('write_only', 'read_write')
+        ('write_only', 'read_write'),
+        ('read_only', 'write_only'),
     ]
 
     num_format = workbook.add_format()
@@ -348,46 +356,15 @@ def collect_db_size_ycsb(result_dir):
 
     return dbsizes, dbsizes_physical
 
-## there are 5 parts for every workloads,
-# like: oltp_read_only.iostat.all_part.csv oltp_read_only.iostat.cpu.csv
-# oltp_read_only.iostat.csv oltp_read_only.result.csv oltp_read_only.time.csv
-pg_fixwls = [
-        'dbsz.csv',
-        'prepare.result.csv',
-        'prepare.time.csv'
-    ]
-pg_workloads = [
-        'oltp_read_only',
-        'oltp_update_non_index',
-        'oltp_update_index',
-        'oltp_point_select',
-        'oltp_write_only',
-    ]
-
-pg_workload_suffix = [
-    'iostat.all_part.csv',
-    'iostat.cpu.csv',
-    'iostat.csv',
-    'result.csv',
-    'time.csv'
-]
 
 def collect_result_files(dir_path):
     f = os.listdir(dir_path)
     results = dict()
-    # rule = {pg_workloads[0]: 0, pg_workloads[1]: 1, pg_workloads[2]: 6, pg_workloads[3]: 11, pg_workloads[4]: 16,
-    #         pg_workloads[5]: 21, pg_workloads[6]: 26}
-    rule = {pg_fixwls[0]: 0}
-    for wl in pg_workloads:
-        for suffix in pg_workload_suffix:
-            item='{0}.{1}'.format(wl,suffix)
-            rule[item]=len(rule)
-
-    rule[pg_fixwls[1]] = len(rule)
-    rule[pg_fixwls[2]] = len(rule)
-
-    wlf = sorted(f, key=lambda x: rule[x])
-    for f in wlf:
+    # rule = {pg_workloads[0]: 0, pg_workloads[1]: 1, pg_workloads[2]: 2, pg_workloads[3]: 3, pg_workloads[4]: 4,
+    #         pg_workloads[5]: 5, pg_workloads[6]: 6}
+    # wlf = sorted(f, key=lambda x: rule[x])
+    # for f in wlf:
+    for f in f:
         if os.path.isfile(os.path.join(dir_path,f)):
             key = f.split('.')[0]
             if key not in results.keys():
@@ -538,19 +515,7 @@ def fill_summary_postgres(workbook, sheet,row_idx,sheetname,dbsize,dbsize_sheet,
     return row_idx + len(sheetname) + parts_interval
 
 
-import glob, time
-def search_all_files_return_by_time_reversed(path, reverse=True):
-    return sorted(glob.glob(os.path.join(path, '*')),
-                  key=lambda x: time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(os.path.getctime(x))),
-                  reverse=reverse)
-
-
 if __name__ == '__main__':
-    # ## debug search csv files by modified sequence
-    # data=search_all_files_return_by_time_reversed("F:\\PostgreSQL\\benchmarks\\4.139\\1029\\pg-20191028_082618_vanda_128.18750000G_ff100\\csv")
-    # print(data)
-    # ## debug search csv files by modified sequence
-
     # result_dirs, out_file, data_type = process_args(argv)
     if len(sys.argv) == 1:
         print("Please input the csv folder")
@@ -612,7 +577,7 @@ if __name__ == '__main__':
                 sheets_list = []
                 dbsize = {}
                 # get the ssd_name coompression_mode
-                share_name=ssd = ''
+                ssd = ''
                 comp = ''
                 dbsz = ''
                 maxleafsz = ''

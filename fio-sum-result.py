@@ -9,8 +9,6 @@ import pandas as pd
 import xlsxwriter
 
 
-
-
 def auto_str_number(text, suffix=''):
     pattern = re.compile(r'^\s*[+-]?\d*[.]\d+$|^\s*[+-]?\s*\d+$')
     match = pattern.match(text)
@@ -64,7 +62,9 @@ def add_sheet_to_workbook(workbook, dir_path, files, share_name,sheets,dbsize,db
             #     if 'all_part' not in ext:
             #         col = add_csv_to_sheet(worksheet, dir_path + '/' + file_name + ext, col, suffix) + 1
             count += 1
-            sht_name = '{0}-{1}'.format(file_name, share_name)
+            sht_name=file_name
+            if share_name != '':
+                sht_name = '{0}-{1}'.format(file_name, share_name)
             worksheet = workbook.add_worksheet(sht_name[:31])
             if 'dbsz' in sht_name:  # dbsz has the different way to add into summary
                 dbszfile = os.path.join(dir_path, '{0}{1}'.format(file_name, '.csv'))
@@ -144,7 +144,7 @@ def fill_summary_sysbench(workbook, suffix, row_idx, dbsizes, dbsizes_physical):
     formula_size = '={0}'
     formula_size_sector = '={0}/2/1024/1024'
     columns = [
-        ('tps', 'B', formula_average),
+        ('TPS', 'B', formula_average),
         ('%99 latency', 'D', formula_average),
         ('Read throughput (MB/s)', 'G', formula_average),
         ('Write throughput (MB/s)', 'H', formula_average),
@@ -158,20 +158,20 @@ def fill_summary_sysbench(workbook, suffix, row_idx, dbsizes, dbsizes_physical):
         ('DB size physical (GB)', dbsizes_physical, formula_size_sector),
     ]
     workloads = [
-        ('read only', 'read_only'),
-        ('update non index', 'update_non_index'),
         ('update index', 'update_index'),
-        ('point_select', 'point_select'),
+        ('update non index', 'update_non_index'),
+        ('read/write', 'read_write'),
         ('write only', 'write_only'),
+        ('read only', 'read_only')
     ]
 
     # DB size here means the size before the workload runs
     workloads_dbsizes_mapping = [
-        ('read_only', 'read_only'),
-        ('update_non_index', 'update_index'),
         ('update_index', 'prepare'),
+        ('update_non_index', 'update_index'),
         ('read_write', 'update_non_index'),
-        ('write_only', 'read_write')
+        ('write_only', 'read_write'),
+        ('read_only', 'write_only'),
     ]
 
     num_format = workbook.add_format()
@@ -348,46 +348,11 @@ def collect_db_size_ycsb(result_dir):
 
     return dbsizes, dbsizes_physical
 
-## there are 5 parts for every workloads,
-# like: oltp_read_only.iostat.all_part.csv oltp_read_only.iostat.cpu.csv
-# oltp_read_only.iostat.csv oltp_read_only.result.csv oltp_read_only.time.csv
-pg_fixwls = [
-        'dbsz.csv',
-        'prepare.result.csv',
-        'prepare.time.csv'
-    ]
-pg_workloads = [
-        'oltp_read_only',
-        'oltp_update_non_index',
-        'oltp_update_index',
-        'oltp_point_select',
-        'oltp_write_only',
-    ]
-
-pg_workload_suffix = [
-    'iostat.all_part.csv',
-    'iostat.cpu.csv',
-    'iostat.csv',
-    'result.csv',
-    'time.csv'
-]
 
 def collect_result_files(dir_path):
     f = os.listdir(dir_path)
     results = dict()
-    # rule = {pg_workloads[0]: 0, pg_workloads[1]: 1, pg_workloads[2]: 6, pg_workloads[3]: 11, pg_workloads[4]: 16,
-    #         pg_workloads[5]: 21, pg_workloads[6]: 26}
-    rule = {pg_fixwls[0]: 0}
-    for wl in pg_workloads:
-        for suffix in pg_workload_suffix:
-            item='{0}.{1}'.format(wl,suffix)
-            rule[item]=len(rule)
-
-    rule[pg_fixwls[1]] = len(rule)
-    rule[pg_fixwls[2]] = len(rule)
-
-    wlf = sorted(f, key=lambda x: rule[x])
-    for f in wlf:
+    for f in f:
         if os.path.isfile(os.path.join(dir_path,f)):
             key = f.split('.')[0]
             if key not in results.keys():
@@ -396,7 +361,7 @@ def collect_result_files(dir_path):
     return results
 
 
-def fill_summary_postgres(workbook, sheet,row_idx,sheetname,dbsize,dbsize_sheet,suffix):
+def fill_summary_mongodb(workbook, sheet,row_idx,sheetname,dbsize,dbsize_sheet,suffix):
     num_format = workbook.add_format()
     num_format.set_num_format('#,##0.0')
 
@@ -404,30 +369,26 @@ def fill_summary_postgres(workbook, sheet,row_idx,sheetname,dbsize,dbsize_sheet,
     formula_average_percent = '=100-AVERAGE(\'{0}\'!{1}2:{1}4000)'
     formula_size = '=\'{0}\'!{1}'
     formula_size_sector = '=\'{0}\'!{1}/2/1024/1024'
-    formula_storage_saving = '=(D{0}-C{0})/D{0}'  # temporary value =(C2-D2)/C2
-    # formula_compression_ratio = '=\'{0}\'!{1}'  # =D2
+    formula_storage_saving = '=(C{0}-D{0})/C{0}'  # temporary value =(C2-D2)/C2
     parts_interval = 3
     columns_ss = [
         ['storage saving', '', formula_storage_saving]
     ]
     columns_sz = [
-        ['DB size physical (GB)', 'B', formula_size_sector],
-        ['DB size logical (GB)', 'C', formula_size_sector],
-        ['comp_ratio', 'D', formula_size]
+        ['DB size logical (GB)', 'B', formula_size],
+        ['DB size physical (GB)', 'C', formula_size_sector]
     ]
     columns = [
-        ['tps', 'E', formula_average],
-        ['qps', 'F', formula_average],
-        ['%99 latency', 'G', formula_average],
-        ['Read throughput (MB/s)', 'O', formula_average],
-        ['Write throughput (MB/s)', 'P', formula_average],
-        ['avgrq-sz', 'Q', formula_average],
-        ['avgqu-sz', 'R', formula_average],
-        ['%util i/o', 'W', formula_average],
-        ['%user cpu', 'Z', formula_average],
-        ['%sys cpu', 'AA', formula_average],
-        ['%iowait cpu', 'AB', formula_average],
-        ['%cpu', 'AC', formula_average_percent]
+        ['ops/sec', 'D', formula_average],
+        ['%99 latency', 'M', formula_average],
+        ['Read throughput (MB/s)', 'S', formula_average],
+        ['Write throughput (MB/s)', 'T', formula_average],
+        ['avgqu-sz', 'V', formula_average],
+        ['%util i/o', 'AA', formula_average],
+        ['%user cpu', 'AD', formula_average],
+        ['%sys cpu', 'AE', formula_average],
+        ['%iowait cpu', 'AF', formula_average],
+        ['%cpu', 'AG', formula_average_percent]
     ]
 
     ssl=len(columns_ss)
@@ -450,11 +411,10 @@ def fill_summary_postgres(workbook, sheet,row_idx,sheetname,dbsize,dbsize_sheet,
         # get db size from dbsize sheet
         prename,suffixname=wksheet.split('-',1)
         dbsz_sheet=dbsize_sheet[0]
-        dblogical_cell='{0}{1}'.format('C',dbsize[prename])
-        dbphy_cell='{0}{1}'.format('B',dbsize[prename])
-        columns_sz[0][1]=dbphy_cell
-        columns_sz[1][1]=dblogical_cell
-        columns_sz[2][1]='{0}{1}'.format('D',dbsize[prename])
+        dblogical_cell='{0}{1}'.format('B',dbsize[prename])
+        dbphy_cell='{0}{1}'.format('C',dbsize[prename])
+        columns_sz[0][1]=dblogical_cell
+        columns_sz[1][1]=dbphy_cell
         if 'intel' in wksheet: # 如何是intel或者Micron的ssd, logical size = physical size
             columns_sz[1][1] = dblogical_cell
             columns_sz[1][2] = formula_size
@@ -502,33 +462,26 @@ def fill_summary_postgres(workbook, sheet,row_idx,sheetname,dbsize,dbsize_sheet,
                 if not value:
                     value = 0
                 sheet.write(row_idx + i + 1, j + 1, value, num_format)
-        #add comp_ratio
-        # for j in range(0, len(columns_sz)):
-        #     column = columns_sz[j]
-        #     value = column[2].format(dbsz_sheet, column[1])
-        #     if not value:
-        #         value = 0
-        #     sheet.write(row_idx + i + 1, j + 1+ssl, value, num_format)
         #add the others data
-        # workloads = ['load', 'u100', 'r50_u50', 'r90_u10']
-        # if prename == workloads[2] or prename == workloads[3]:
-        #     columns[2][1] = 'AD'
-        #     columns[3][1] = 'AE'
-        #     columns[4][1] = 'AG'
-        #     columns[5][1] = 'AL'
-        #     columns[6][1] = 'AO'
-        #     columns[7][1] = 'AP'
-        #     columns[8][1] = 'AQ'
-        #     columns[9][1] = 'AR'
-        # else:
-        #     columns[2][1] = 'S'
-        #     columns[3][1] = 'T'
-        #     columns[4][1] = 'V'
-        #     columns[5][1] = 'AA'
-        #     columns[6][1] = 'AD'
-        #     columns[7][1] = 'AE'
-        #     columns[8][1] = 'AF'
-        #     columns[9][1] = 'AG'
+        workloads = ['load', 'u100', 'r50_u50', 'r90_u10']
+        if prename == workloads[2] or prename == workloads[3]:
+            columns[2][1] = 'AD'
+            columns[3][1] = 'AE'
+            columns[4][1] = 'AG'
+            columns[5][1] = 'AL'
+            columns[6][1] = 'AO'
+            columns[7][1] = 'AP'
+            columns[8][1] = 'AQ'
+            columns[9][1] = 'AR'
+        else:
+            columns[2][1] = 'S'
+            columns[3][1] = 'T'
+            columns[4][1] = 'V'
+            columns[5][1] = 'AA'
+            columns[6][1] = 'AD'
+            columns[7][1] = 'AE'
+            columns[8][1] = 'AF'
+            columns[9][1] = 'AG'
         for j in range(0, len(columns)):
             column = columns[j]
             value = column[2].format(wksheet, column[1])
@@ -538,19 +491,7 @@ def fill_summary_postgres(workbook, sheet,row_idx,sheetname,dbsize,dbsize_sheet,
     return row_idx + len(sheetname) + parts_interval
 
 
-import glob, time
-def search_all_files_return_by_time_reversed(path, reverse=True):
-    return sorted(glob.glob(os.path.join(path, '*')),
-                  key=lambda x: time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(os.path.getctime(x))),
-                  reverse=reverse)
-
-
 if __name__ == '__main__':
-    # ## debug search csv files by modified sequence
-    # data=search_all_files_return_by_time_reversed("F:\\PostgreSQL\\benchmarks\\4.139\\1029\\pg-20191028_082618_vanda_128.18750000G_ff100\\csv")
-    # print(data)
-    # ## debug search csv files by modified sequence
-
     # result_dirs, out_file, data_type = process_args(argv)
     if len(sys.argv) == 1:
         print("Please input the csv folder")
@@ -612,7 +553,8 @@ if __name__ == '__main__':
                 sheets_list = []
                 dbsize = {}
                 # get the ssd_name coompression_mode
-                share_name=ssd = ''
+                share_name = ''
+                ssd = ''
                 comp = ''
                 dbsz = ''
                 maxleafsz = ''
@@ -622,14 +564,20 @@ if __name__ == '__main__':
                     with open(benchfp) as fw:
                         rt = fw.readline().split()
                         ssd = rt[0].split('=')[1][:-4]
-                        dbsz = rt[1].split('=')[1]
-                        share_name = '{0}-{1}'.format(ssd, dbsz)
-                if dbsz == '2048G':
-                    dbsz='2T'
-                share_name = share_name.lstrip('.')
-                share_name = share_name.rstrip('.')
+                        comp = rt[1].split('=')[1]
+                        dbsz = rt[2].split('=')[1]
+                        maxleafsz = rt[3].split('=')[1].rstrip('KB')
+                        kvsize = rt[4].split('=')[1]
+                        if dbsz == '2048G':
+                            dbsz='2T'
+                        if comp == 'none':
+                            share_name = '{0}-{1}{2}-{3}'.format(ssd, dbsz, maxleafsz, kvsize)
+                        else:
+                            share_name = '{0}-{1}-{2}{3}-{4}'.format(ssd, comp, dbsz, maxleafsz,kvsize)
+                        share_name = share_name.lstrip('.')
+                        share_name = share_name.rstrip('.')
                 files = collect_result_files(dir_path)
                 count = add_sheet_to_workbook(workbook, dir_path, files,share_name,sheets_list, dbsize, dbsize_sheet)
-                summary_row_idx = fill_summary_postgres(workbook,summary_sheet,summary_row_idx,sheets_list,
-                                                       dbsize,dbsize_sheet,'{0}-{1}'.format(kvsize,suffix))
+                # summary_row_idx = fill_summary_fio(workbook,summary_sheet,summary_row_idx,sheets_list,
+                #                                        dbsize,dbsize_sheet,'{0}-{1}'.format(kvsize,suffix))
     workbook.close()
