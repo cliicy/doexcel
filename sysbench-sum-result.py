@@ -361,6 +361,7 @@ pg_workloads = [
         'oltp_update_non_index',
         'oltp_update_index',
         'oltp_point_select',
+        'oltp_read_write',
         'oltp_write_only',
     ]
 
