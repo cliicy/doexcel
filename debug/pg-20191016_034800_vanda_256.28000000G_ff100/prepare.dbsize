@@ -1,0 +1,30 @@
+0	/opt/data/vanda/postgresql-10.10/pg_wal/archive_status
+41	/opt/data/vanda/postgresql-10.10/pg_wal
+1	/opt/data/vanda/postgresql-10.10/global
+0	/opt/data/vanda/postgresql-10.10/pg_commit_ts
+0	/opt/data/vanda/postgresql-10.10/pg_dynshmem
+1	/opt/data/vanda/postgresql-10.10/pg_notify
+0	/opt/data/vanda/postgresql-10.10/pg_serial
+0	/opt/data/vanda/postgresql-10.10/pg_snapshots
+1	/opt/data/vanda/postgresql-10.10/pg_subtrans
+0	/opt/data/vanda/postgresql-10.10/pg_twophase
+1	/opt/data/vanda/postgresql-10.10/pg_multixact/members
+1	/opt/data/vanda/postgresql-10.10/pg_multixact/offsets
+1	/opt/data/vanda/postgresql-10.10/pg_multixact
+1	/opt/data/vanda/postgresql-10.10/base/1
+1	/opt/data/vanda/postgresql-10.10/base/13859
+1	/opt/data/vanda/postgresql-10.10/base/13860
+1779	/opt/data/vanda/postgresql-10.10/base/16384
+0	/opt/data/vanda/postgresql-10.10/base/pgsql_tmp
+1779	/opt/data/vanda/postgresql-10.10/base
+0	/opt/data/vanda/postgresql-10.10/pg_replslot
+0	/opt/data/vanda/postgresql-10.10/pg_tblspc
+0	/opt/data/vanda/postgresql-10.10/pg_stat
+1	/opt/data/vanda/postgresql-10.10/pg_stat_tmp
+1	/opt/data/vanda/postgresql-10.10/pg_xact
+0	/opt/data/vanda/postgresql-10.10/pg_logical/snapshots
+0	/opt/data/vanda/postgresql-10.10/pg_logical/mappings
+1	/opt/data/vanda/postgresql-10.10/pg_logical
+1819	/opt/data/vanda/postgresql-10.10
+Free_space physical_size logical_size comp_ratio
+1901149368  4307420664  11250544016 2.61

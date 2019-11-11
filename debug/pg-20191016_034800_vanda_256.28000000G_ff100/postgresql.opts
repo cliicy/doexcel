@@ -1,0 +1,18 @@
+ shared_buffers 
+----------------
+ 52GB
+(1 row)
+
+ wal_compression 
+-----------------
+ on
+(1 row)
+
+ max_wal_size 
+--------------
+ 40GB
+(1 row)
+
+tcn      18604  9.3  0.4 55995224 1129740 pts/1 S+  03:47   0:00 /opt/app/postgresql-10.10/bin/postgres -D /opt/data/vanda/postgresql-10.10
+tcn      18617  0.0  0.0 113316   940 pts/1    S+   03:48   0:00 /bin/bash ./3_run.sh ./sysbench-cfg/benchmark.cfg
+tcn      18617  0.0  0.0 113316   928 pts/1    S+   03:48   0:00 /bin/bash ./3_run.sh ./sysbench-cfg/benchmark.cfg
