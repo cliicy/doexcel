@@ -57,14 +57,8 @@ def add_sheet_to_workbook(workbook, dir_path, files, share_name,sheets,dbsize,db
     count = 0
     for file_name in files.keys():
         if not file_name.startswith('prepare') and 'redolog' not in file_name:
-            # count += 1
-            # worksheet = workbook.add_worksheet((file_name.replace('oltp_', ''))[:31] + suffix)
-            # col = 0
-            # for ext in sorted(files[file_name], reverse=True):
-            #     if 'all_part' not in ext:
-            #         col = add_csv_to_sheet(worksheet, dir_path + '/' + file_name + ext, col, suffix) + 1
             count += 1
-            sht_name = '{0}-{1}'.format(file_name, share_name)
+            sht_name = '{0}-{1}'.format(file_name.replace(wlprefix, ''), share_name)
             worksheet = workbook.add_worksheet(sht_name[:31])
             if 'dbsz' in sht_name:  # dbsz has the different way to add into summary
                 dbszfile = os.path.join(dir_path, '{0}{1}'.format(file_name, '.csv'))
@@ -73,7 +67,6 @@ def add_sheet_to_workbook(workbook, dir_path, files, share_name,sheets,dbsize,db
                     dbsize.update({v: k + 2})
                 dbsize_sheet.append(sht_name)
             else:
-                # sht_name=sht_name.lstrip('oltp_')
                 sheets.append(sht_name[:31])
             col = 0
             for ext in sorted(files[file_name], reverse=True):
@@ -139,231 +132,31 @@ def process_args(argv):
     return tuple_list, out_file, data_type
 
 
-def fill_summary_sysbench(workbook, suffix, row_idx, dbsizes, dbsizes_physical):
-    formula_average = '=AVERAGE(\'{0}\'!{1}2:{1}2000)'
-    formula_average_percent = '=100-AVERAGE(\'{0}\'!{1}2:{1}2000)'
-    formula_size = '={0}'
-    formula_size_sector = '={0}/2/1024/1024'
-    columns = [
-        ('tps', 'B', formula_average),
-        ('%99 latency', 'D', formula_average),
-        ('Read throughput (MB/s)', 'G', formula_average),
-        ('Write throughput (MB/s)', 'H', formula_average),
-        ('%util i/o', 'O', formula_average),
-        ('%user cpu', 'Q', formula_average),
-        ('%sys cpu', 'R', formula_average),
-        ('%iowait cpu', 'S', formula_average),
-        ('%cpu', 'T', formula_average_percent),
-        # this fields do not use formula, instead data comes from the dicts passed in
-        ('DB size (GB)', dbsizes, formula_size),
-        ('DB size physical (GB)', dbsizes_physical, formula_size_sector),
-    ]
-    workloads = [
-        ('read only', 'read_only'),
-        ('update non index', 'update_non_index'),
-        ('update index', 'update_index'),
-        ('point_select', 'point_select'),
-        ('write only', 'write_only'),
-    ]
-
-    # DB size here means the size before the workload runs
-    workloads_dbsizes_mapping = [
-        ('read_only', 'read_only'),
-        ('update_non_index', 'update_index'),
-        ('update_index', 'prepare'),
-        ('read_write', 'update_non_index'),
-        ('write_only', 'read_write')
-    ]
-
-    num_format = workbook.add_format()
-    num_format.set_num_format('#,##0')
-    sheet = workbook.get_worksheet_by_name('summary')
-
-    sheet.write(row_idx, 0, suffix)
-
-    for i in range(0, len(columns)):
-        sheet.write(row_idx, i + 1, columns[i][0] + '-' + suffix)
-
-    for i in range(0, len(workloads)):
-        workload = workloads[i]
-        mapping = workloads_dbsizes_mapping[i]
-        sheet.write(row_idx + i + 1, 0, workload[0])
-        for j in range(0, len(columns)):
-            column = columns[j]
-            if isinstance(column[1], dict):
-                if mapping[1] in column[1].keys():
-                    value = column[2].format(column[1][mapping[1]])
-                else:
-                    value = 0
-            else:
-                # reference to proper sheet and get the values based on the formula defined
-                value = column[2].format(workload[1] + '-' + suffix, column[1])
-
-            if not value:
-                value = 0
-            sheet.write(row_idx + i + 1, j + 1, value, num_format)
-
-    return row_idx + len(workloads) + 3
-
-
-def fill_summary_ycsb(workbook, suffix, row_idx, dbsizes, dbsizes_physical):
-    formula_average = '=AVERAGE(\'{0}\'!{1}2:{1}2000)'
-    formula_average_percent = '=100-AVERAGE(\'{0}\'!{1}2:{1}2000)'
-    formula_size = '={0}'
-    formula_size_sector = '={0}/2/1024/1024'
-    workloads = [
-        ('load', 'load'),
-        ('100% update', 'u100'),
-        ('50% read / 50% update', 'r50_u50'),
-        ('90% read / 10% update', 'r90_u10'),
-    ]
-    columns = [
-        ('ops/sec', 'A', formula_average),
-        ('Read throughput (MB/s)', 'D', formula_average),
-        ('Write throughput (MB/s)', 'E', formula_average),
-        ('avgrq-sz', 'F', formula_average),
-        ('%util i/o', 'L', formula_average),
-        ('%user cpu', 'N', formula_average),
-        ('%sys cpu', 'O', formula_average),
-        ('%iowait cpu', 'P', formula_average),
-        ('%cpu', 'Q', formula_average_percent),
-        # this fields do not use formula, instead data comes from the dicts passed in
-        ('DB size (GB)', dbsizes, formula_size),
-        ('DB size physical (GB)', dbsizes_physical, formula_size_sector),
-    ]
-
-    # DB size here means the size before the workload runs
-    workloads_dbsizes_mapping = [
-        ('load', 'load'),
-        ('100% update', 'u100'),
-        ('50% read / 50% update', 'r50_u50'),
-        ('90% read / 10% update', 'r90_u10'),
-    ]
-    num_format = workbook.add_format()
-    num_format.set_num_format('#,##0')
-    sheet = workbook.get_worksheet_by_name('summary')
-    sheet.write(row_idx, 0, suffix)
-
-    for i in range(0, len(columns)):
-        sheet.write(row_idx, i + 1, columns[i][0] + '-' + suffix)
-    row_idx += 1
-
-    for i in range(0, len(workloads)):
-        workload = workloads[i]
-        if workload[1] + '-' + suffix not in workbook.sheetnames:
-            continue
-        mapping = workloads_dbsizes_mapping[i]
-        sheet.write(row_idx, 0, workload[0])
-        for j in range(0, len(columns)):
-            column = columns[j]
-            if isinstance(column[1], dict):
-                if mapping[1] in column[1].keys():
-                    value = column[2].format(column[1][mapping[1]])
-                else:
-                    value = 0
-            else:
-                # reference to proper sheet and get the values based on the formula defined
-                value = column[2].format(workload[1] + '-' + suffix, column[1])
-            if not value:
-                value = 0
-            sheet.write(row_idx, j + 1, value, num_format)
-        row_idx += 1
-    return row_idx + 1
-
-
-def collect_db_size_sysbench(result_dir):
-    pattern = re.compile(r'.*user data size\s([0-9]+).*')
-    file_ext = '.dbsize'
-    magic_str = 'mysql-5.7.25'
-    workloads = [
-        'prepare',
-        'oltp_update_index',
-        'oltp_update_non_index',
-        'oltp_read_write',
-        'oltp_write_only',
-        'oltp_read_only'
-    ]
-
-    dbsizes = {}
-    dbsizes_physical = {}
-
-    if len(result_dir) > 0 and result_dir[-1] != '/':
-        result_dir += '/'
-
-    for workload in workloads:
-        wl_file = result_dir + workload + file_ext
-        if not os.path.exists(wl_file):
-            continue
-
-        lines = open(wl_file, 'r').readlines()
-        workload_key = workload.replace('oltp_', '')
-        for line in lines:
-            if line.strip('\n').strip('/')[-len(magic_str):] == magic_str:
-                dbsizes[workload_key] = line.split('\t')[0]
-            if line.lower().startswith('free space'):
-                match = pattern.match(line.lower())
-                if match:
-                    dbsizes_physical[workload_key] = match.group(1)
-
-    for workload_key in dbsizes.keys():
-        if workload_key not in dbsizes_physical.keys():
-            dbsizes_physical[workload_key] = int(dbsizes[workload_key]) * 2 * 1024 * 1024
-
-    return dbsizes, dbsizes_physical
-
-def collect_db_size_ycsb(result_dir):
-    pattern = re.compile(r'.*user data size\s([0-9]+).*')
-    file_ext = '.600g.dbsize'
-    magic_str = 'rocksdb-5.11.3'
-    workloads = [
-        'load',
-        'u100',
-        'r50_u50',
-        'r90_u10',
-    ]
-
-    dbsizes = {}
-    dbsizes_physical = {}
-
-    if len(result_dir) > 0 and result_dir[-1] != '/':
-        result_dir += '/'
-
-    for workload in workloads:
-        wl_file = result_dir + workload + file_ext
-        if not os.path.exists(wl_file):
-            continue
-
-        lines = open(wl_file, 'r').readlines()
-        workload_key = workload
-        for line in lines:
-            if line.strip('\n').strip('/')[-len(magic_str):] == magic_str:
-                dbsizes[workload_key] = line.split('\t')[0]
-            if line.lower().startswith('free space'):
-                match = pattern.match(line.lower())
-                if match:
-                    dbsizes_physical[workload_key] = match.group(1)
-
-    for workload_key in dbsizes.keys():
-        if workload_key not in dbsizes_physical.keys():
-            dbsizes_physical[workload_key] = int(dbsizes[workload_key]) * 2 * 1024 * 1024
-
-    return dbsizes, dbsizes_physical
-
 ## there are 5 parts for every workloads,
 # like: oltp_read_only.iostat.all_part.csv oltp_read_only.iostat.cpu.csv
 # oltp_read_only.iostat.csv oltp_read_only.result.csv oltp_read_only.time.csv
+wlprefix="oltp_"
 pg_fixwls = [
         'dbsz.csv',
         'prepare.result.csv',
         'prepare.time.csv'
     ]
+# pg_workloads = [
+#         'oltp_read_only',
+#         'oltp_update_non_index',
+#         'oltp_update_index',
+#         'oltp_point_select',
+#         'oltp_read_write',
+#         'oltp_write_only',
+#     ]
+
 pg_workloads = [
-        'oltp_read_only',
-        'oltp_update_non_index',
-        'oltp_update_index',
-        'oltp_point_select',
-        'oltp_read_write',
-        'oltp_write_only',
+        'read_only',
+        'update_non_index',
+        'update_index',
+        'point_select',
+        'read_write',
+        'write_only',
     ]
 
 pg_workload_suffix = [
@@ -382,7 +175,7 @@ def collect_result_files(dir_path):
     rule = {pg_fixwls[0]: 0}
     for wl in pg_workloads:
         for suffix in pg_workload_suffix:
-            item='{0}.{1}'.format(wl,suffix)
+            item='{0}{1}.{2}'.format(wlprefix,wl,suffix)
             rule[item]=len(rule)
 
     rule[pg_fixwls[1]] = len(rule)
@@ -407,7 +200,7 @@ def fill_summary_postgres(workbook, sheet,row_idx,sheetname,dbsize,dbsize_sheet,
     formula_size = '=\'{0}\'!{1}'
     formula_size_sector = '=\'{0}\'!{1}/2/1024/1024'
     formula_storage_saving = '=(D{0}-C{0})/D{0}'  # temporary value =(C2-D2)/C2
-    # formula_compression_ratio = '=\'{0}\'!{1}'  # =D2
+
     parts_interval = 3
     columns_ss = [
         ['storage saving', '', formula_storage_saving]
@@ -449,17 +242,18 @@ def fill_summary_postgres(workbook, sheet,row_idx,sheetname,dbsize,dbsize_sheet,
 
     for i in range(0, len(sheetname)):
         wksheet = sheetname[i]
-        # wksheet='{0}{1}'.format('oltp-',wksheet)
         # get db size from dbsize sheet
         prename,suffixname=wksheet.split('-',1)
+        prename = '{0}{1}'.format(wlprefix, prename)
         dbsz_sheet=dbsize_sheet[0]
         dblogical_cell='{0}{1}'.format('C',dbsize[prename])
         dbphy_cell='{0}{1}'.format('B',dbsize[prename])
         columns_sz[0][1]=dbphy_cell
         columns_sz[1][1]=dblogical_cell
         columns_sz[2][1]='{0}{1}'.format('D',dbsize[prename])
-        if 'intel' in wksheet: # 如何是intel或者Micron的ssd, logical size = physical size
-            columns_sz[1][1] = dblogical_cell
+        if 'intel' in wksheet: # 如果是intel或者Micron的ssd, logical size = physical size
+            columns_sz[0][1] = dblogical_cell
+            columns_sz[0][2] = formula_size
             columns_sz[1][2] = formula_size
         # get db size from dbsize sheet
 
@@ -512,26 +306,6 @@ def fill_summary_postgres(workbook, sheet,row_idx,sheetname,dbsize,dbsize_sheet,
         #     if not value:
         #         value = 0
         #     sheet.write(row_idx + i + 1, j + 1+ssl, value, num_format)
-        #add the others data
-        # workloads = ['load', 'u100', 'r50_u50', 'r90_u10']
-        # if prename == workloads[2] or prename == workloads[3]:
-        #     columns[2][1] = 'AD'
-        #     columns[3][1] = 'AE'
-        #     columns[4][1] = 'AG'
-        #     columns[5][1] = 'AL'
-        #     columns[6][1] = 'AO'
-        #     columns[7][1] = 'AP'
-        #     columns[8][1] = 'AQ'
-        #     columns[9][1] = 'AR'
-        # else:
-        #     columns[2][1] = 'S'
-        #     columns[3][1] = 'T'
-        #     columns[4][1] = 'V'
-        #     columns[5][1] = 'AA'
-        #     columns[6][1] = 'AD'
-        #     columns[7][1] = 'AE'
-        #     columns[8][1] = 'AF'
-        #     columns[9][1] = 'AG'
         for j in range(0, len(columns)):
             column = columns[j]
             value = column[2].format(wksheet, column[1])
