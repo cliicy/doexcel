@@ -251,7 +251,8 @@ def fill_summary_postgres(workbook, sheet,row_idx,sheetname,dbsize,dbsize_sheet,
         columns_sz[0][1]=dbphy_cell
         columns_sz[1][1]=dblogical_cell
         columns_sz[2][1]='{0}{1}'.format('D',dbsize[prename])
-        if 'intel' in wksheet: # 如果是intel或者Micron的ssd, logical size = physical size
+        # if 'intel' in wksheet: # 如果是intel或者Micron的ssd, logical size = physical size
+        if 'vanda' not in wksheet: # 如果是intel或者Micron的ssd, logical size = physical size
             columns_sz[0][1] = dblogical_cell
             columns_sz[0][2] = formula_size
             columns_sz[1][2] = formula_size

@@ -5,3 +5,6 @@ python sb-result.py  -d /f/mongodb/code_debug/case6 -s luo -o ./debug_res/aa.xls
 
 latest usage:
 python sum-result.py F:\mongodb\139_133_output\0912_vanda+snappy bfo
+
+PostgreSQL/TiDB usage:
+python sysbench-summary.py F:\tidb\benchmark\10.202\202.158.d1218
