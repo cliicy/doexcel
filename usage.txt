@@ -8,3 +8,6 @@ python sum-result.py F:\mongodb\139_133_output\0912_vanda+snappy bfo
 
 PostgreSQL/TiDB usage:
 python sysbench-summary.py F:\tidb\benchmark\10.202\202.158.d1218
+
+tpcc usage:
+python alpha.sysbench-sum-result.py F:\PostgreSQL\2020-4k-8k\tpcc
