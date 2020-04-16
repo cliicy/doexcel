@@ -507,6 +507,7 @@ def fill_summary_fdb(workbook, sheet,row_idx,sheetname,dbsize,dbsize_sheet,suffi
         ['%99 latency (us)', 'M', formula_average],
         ['Read throughput (MB/s)', 'S', formula_average],
         ['Write throughput (MB/s)', 'T', formula_average],
+        ['avgrq-sz', 'U', formula_average],
         ['avgqu-sz', 'V', formula_average],
         ['%util i/o', 'AA', formula_average],
         ['%user cpu', 'AD', formula_average],
@@ -598,21 +599,23 @@ def fill_summary_fdb(workbook, sheet,row_idx,sheetname,dbsize,dbsize_sheet,suffi
         if prename == workloads[2] or prename == workloads[3]:
             columns[2][1] = 'AD'
             columns[3][1] = 'AE'
-            columns[4][1] = 'AG'
-            columns[5][1] = 'AL'
-            columns[6][1] = 'AO'
-            columns[7][1] = 'AP'
-            columns[8][1] = 'AQ'
-            columns[9][1] = 'AR'
+            columns[4][1] = 'AF'
+            columns[5][1] = 'AG'
+            columns[6][1] = 'AL'
+            columns[7][1] = 'AO'
+            columns[8][1] = 'AP'
+            columns[9][1] = 'AQ'
+            columns[10][1] = 'AR'
         else:
             columns[2][1] = 'S'
             columns[3][1] = 'T'
-            columns[4][1] = 'V'
-            columns[5][1] = 'AA'
-            columns[6][1] = 'AD'
-            columns[7][1] = 'AE'
-            columns[8][1] = 'AF'
-            columns[9][1] = 'AG'
+            columns[4][1] = 'U'
+            columns[5][1] = 'V'
+            columns[6][1] = 'AA'
+            columns[7][1] = 'AD'
+            columns[8][1] = 'AE'
+            columns[9][1] = 'AF'
+            columns[10][1] = 'AG'
 
         for j in range(0, len(columns)):
             column = columns[j]
